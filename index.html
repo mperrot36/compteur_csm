@@ -15,6 +15,7 @@
             --color-2: #4ade80;
             --color-3: #facc15;
             --color-4: #f472b6;
+            --color-67: #ff6b35;
             --bar-active: #38bdf8;
             --bar-inactive: #1e293b;
         }
@@ -89,11 +90,56 @@
         .row-3 .value { color: var(--color-3); }
         .row-4 .value { color: var(--color-4); font-size: 2rem; }
 
+        /* --- COMPTEUR 67 --- */
+        .row-67 {
+            border: 1px solid rgba(255, 107, 53, 0.4);
+            border-radius: 12px;
+            background: rgba(255, 107, 53, 0.07);
+            padding: 15px !important;
+            position: relative;
+            overflow: hidden;
+            width: 100%;
+            box-sizing: border-box;
+            margin-bottom: 25px;
+        }
+
+        .row-67::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(ellipse at center, rgba(255,107,53,0.12) 0%, transparent 70%);
+            pointer-events: none;
+        }
+
+        .row-67 .value {
+            color: var(--color-67);
+            font-size: 3.5rem;
+            text-shadow: 0 0 30px rgba(255, 107, 53, 0.5);
+            transition: transform 0.1s ease, text-shadow 0.2s ease;
+        }
+
+        .row-67 .value.bump {
+            transform: scale(1.15);
+            text-shadow: 0 0 50px rgba(255, 107, 53, 0.9), 0 0 20px rgba(255, 107, 53, 0.6);
+        }
+
+        .row-67 .label {
+            color: #ff9a6c;
+            font-size: 0.85rem;
+            letter-spacing: 2px;
+        }
+
+        .row-67-hint {
+            font-size: 0.65rem;
+            color: rgba(255, 107, 53, 0.5);
+            margin-top: 4px;
+            letter-spacing: 0.5px;
+        }
+
         /* --- STYLE DE LA BARRE --- */
         .seconds-bar-container {
             width: 100%;
             display: grid;
-            /* Grille responsive qui s'adapte à la largeur */
             grid-template-columns: repeat(auto-fill, minmax(3px, 1fr)); 
             gap: 1px;
             background-color: var(--bar-inactive);
@@ -107,7 +153,6 @@
             aspect-ratio: 1;
             background-color: var(--bar-active);
             border-radius: 1px;
-            /* Pas de transition ici pour éviter le lag sur 3600 éléments */
         }
 
         .block.off {
@@ -118,6 +163,7 @@
             h1 { font-size: 1.2rem; margin-bottom: 20px; }
             .value { font-size: 2.2rem; }
             .row-4 .value { font-size: 1.6rem; }
+            .row-67 .value { font-size: 2.8rem; }
             .seconds-bar-container {
                 grid-template-columns: repeat(auto-fill, minmax(2px, 1fr));
                 gap: 1px;
@@ -150,6 +196,13 @@
             <div class="value" id="ms-total-display">0</div>
         </div>
 
+        <!-- COMPTEUR 67 -->
+        <div class="counter-row row-67">
+            <div class="label">✦ Apparitions de "67"</div>
+            <div class="value" id="count-67">0</div>
+            <div class="row-67-hint">+1 chaque fois que "67" apparaît dans un compteur</div>
+        </div>
+
         <div class="label" style="margin-bottom: 10px; width: 100%; text-align: left;">Progression de l'heure (3600s)</div>
         <div class="seconds-bar-container" id="seconds-bar"></div>
     </div>
@@ -160,7 +213,6 @@
         const totalBlocks = 3600;
         const blocksArray = [];
 
-        // Création des blocs au chargement
         for (let i = 0; i < totalBlocks; i++) {
             const block = document.createElement('div');
             block.classList.add('block');
@@ -168,8 +220,31 @@
             blocksArray.push(block);
         }
 
-        // Variable pour suivre l'état précédent et optimiser les mises à jour
         let lastSecondsElapsed = -1;
+
+        // --- 2. LOGIQUE DU COMPTEUR 67 ---
+        let count67 = 0;
+        let prev67Count = 0;
+        const count67El = document.getElementById('count-67');
+
+        // Compte combien de fois "67" apparaît dans une chaîne
+        function countOccurrences67(str) {
+            let count = 0;
+            let idx = 0;
+            while ((idx = str.indexOf('67', idx)) !== -1) {
+                count++;
+                idx += 2;
+            }
+            return count;
+        }
+
+        function bump67() {
+            count67El.classList.remove('bump');
+            // Forcer reflow pour relancer l'animation
+            void count67El.offsetWidth;
+            count67El.classList.add('bump');
+            setTimeout(() => count67El.classList.remove('bump'), 200);
+        }
 
         function getNext16h() {
             const now = new Date();
@@ -187,15 +262,12 @@
             const now = new Date();
             const diff = targetTime - now;
 
-            // Gestion du passage à 16h
             if (diff <= 0) {
                 targetTime = getNext16h();
-                // Reset texte
                 document.getElementById('hms-display').innerText = "00:00:00";
                 document.getElementById('ms-display').innerText = "00:00";
                 document.getElementById('s-display').innerText = "0";
                 document.getElementById('ms-total-display').innerText = "0";
-                // On force le reset de la barre au prochain tour de boucle
                 lastSecondsElapsed = -1; 
                 requestAnimationFrame(updateCountdown);
                 return;
@@ -212,29 +284,48 @@
 
             const pad = (num) => num.toString().padStart(2, '0');
 
-            document.getElementById('hms-display').innerText = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
-            document.getElementById('ms-display').innerText = `${totalMinutes}:${pad(remainingSeconds)}`;
-            document.getElementById('s-display').innerText = totalSeconds.toLocaleString('fr-FR');
-            document.getElementById('ms-total-display').innerText = totalMilliseconds.toLocaleString('fr-FR');
+            const hmsStr       = `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`;
+            const msStr        = `${totalMinutes}:${pad(remainingSeconds)}`;
+            const sStr         = totalSeconds.toLocaleString('fr-FR');
+            const msTotalStr   = totalMilliseconds.toLocaleString('fr-FR');
 
-            // --- LOGIQUE CORRIGÉE DE LA BARRE ---
-            
-            const currentHour = now.getHours();
+            document.getElementById('hms-display').innerText     = hmsStr;
+            document.getElementById('ms-display').innerText      = msStr;
+            document.getElementById('s-display').innerText       = sStr;
+            document.getElementById('ms-total-display').innerText = msTotalStr;
+
+            // --- COMPTAGE DES "67" dans tous les affichages ---
+            // On enlève les séparateurs de milliers (espace fine / espace normale) pour chercher dans les chiffres bruts
+            const rawS    = totalSeconds.toString();
+            const rawMs   = totalMilliseconds.toString();
+            const rawHms  = `${pad(hours)}${pad(minutes)}${pad(seconds)}`;
+            const rawMsStr = `${totalMinutes}${pad(remainingSeconds)}`;
+
+            const newTotal67 =
+                countOccurrences67(rawHms) +
+                countOccurrences67(rawMsStr) +
+                countOccurrences67(rawS) +
+                countOccurrences67(rawMs);
+
+            if (newTotal67 !== prev67Count) {
+                const delta = newTotal67 - prev67Count;
+                if (delta > 0) {
+                    count67 += delta;
+                    count67El.innerText = count67.toLocaleString('fr-FR');
+                    bump67();
+                }
+                prev67Count = newTotal67;
+            }
+
+            // --- LOGIQUE DE LA BARRE ---
             const currentMin = now.getMinutes();
             const currentSec = now.getSeconds();
-            
-            // Nombre de secondes écoulées depuis le début de l'heure actuelle (0 à 3599)
             const currentSecondsElapsed = (currentMin * 60) + currentSec;
 
-            // Si on change d'heure (ex: 15:59:59 -> 16:00:00), le compteur retombe à 0
             if (currentSecondsElapsed < lastSecondsElapsed) {
-                // C'est une nouvelle heure, on rallume TOUT
                 blocksArray.forEach(b => b.classList.remove('off'));
                 lastSecondsElapsed = currentSecondsElapsed;
-            } 
-            // Sinon, on éteint les blocs qui se sont écoulés depuis la dernière frame
-            else if (currentSecondsElapsed > lastSecondsElapsed) {
-                // On boucle seulement sur la différence (généralement 1 bloc, parfois plus si lag)
+            } else if (currentSecondsElapsed > lastSecondsElapsed) {
                 for (let i = lastSecondsElapsed + 1; i <= currentSecondsElapsed; i++) {
                     if (blocksArray[i]) {
                         blocksArray[i].classList.add('off');
@@ -242,7 +333,6 @@
                 }
                 lastSecondsElapsed = currentSecondsElapsed;
             }
-            // Si égal, on ne fait rien (gain de performance)
 
             requestAnimationFrame(updateCountdown);
         }
